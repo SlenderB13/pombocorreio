@@ -1,0 +1,22 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        google()
+    }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == "com.android.library") useVersion("8.9.1")
+            if (requested.id.id == "org.jetbrains.kotlin.android") useVersion("2.1.0")
+        }
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories { mavenCentral(); google() }
+}
+
+include ':tauri-android'
+project(':tauri-android').projectDir = new File('./.tauri/tauri-api')
+
