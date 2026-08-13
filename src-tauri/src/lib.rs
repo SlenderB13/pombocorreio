@@ -516,14 +516,17 @@ async fn send_files(
 #[cfg(desktop)]
 fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     use tauri::{
+        image::Image,
         menu::{Menu, MenuItem},
         tray::TrayIconBuilder,
     };
     let open = MenuItem::with_id(app, "open", "Send files…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
+    let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-mail.png"))?;
     TrayIconBuilder::new()
-        .icon(app.default_window_icon().expect("app icon").clone())
+        .icon(tray_icon)
+        .tooltip("Pombo Correio")
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => {

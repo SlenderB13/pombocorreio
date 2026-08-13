@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Bird, Check, File, FileUp, RefreshCw, Send, Smartphone, X } from "lucide-react";
+import { Check, File, FileUp, RefreshCw, Send, Smartphone, X } from "lucide-react";
 import type { AppSnapshot, IncomingOffer, Peer } from "./types";
 import "./App.css";
 
@@ -78,7 +78,7 @@ function App() {
   }
 
   return <main>
-    <header><div className="brand"><Bird size={22} /></div><div className="identity"><h1>Pombo Correio</h1><p>{snapshot.deviceName}</p></div><div className="online"><i /> Online</div></header>
+    <header><div className="brand"><img src="/pombo-correio.png" alt="" /></div><div className="identity"><h1>Pombo Correio</h1><p>{snapshot.deviceName}</p></div><div className="online"><i /> Online</div></header>
     {snapshot.incoming.map((offer) => <section className="incoming" key={offer.id}>
       <div><strong>{offer.senderName}</strong> wants to send {offer.files.length} file{offer.files.length === 1 ? "" : "s"}.</div>
       <small>{offer.files.map((file) => file.name).join(", ")}</small>
