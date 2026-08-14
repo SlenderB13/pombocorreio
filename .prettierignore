@@ -1,0 +1,9 @@
+dist
+node_modules
+src-tauri/gen
+src-tauri/target
+packaging/arch/pkg
+packaging/arch/src
+plugins/inbox/android/.tauri
+plugins/inbox/android/build
+*.pkg.tar.zst
