@@ -62,7 +62,7 @@ pub(crate) fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Send files…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
-    let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-mail.png"))?;
+    let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-bird.png"))?;
 
     TrayIconBuilder::new()
         .icon(tray_icon)
