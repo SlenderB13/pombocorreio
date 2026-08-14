@@ -8,11 +8,24 @@ use tauri::AppHandle;
 
 const SERVICE_TYPE: &str = "_pombocorreio._tcp.local.";
 
+pub(crate) struct DiscoveryService {
+    daemon: ServiceDaemon,
+    service: ServiceInfo,
+}
+
+impl DiscoveryService {
+    pub(crate) fn reannounce(&self) -> Result<(), String> {
+        self.daemon
+            .register(self.service.clone())
+            .map_err(|error| error.to_string())
+    }
+}
+
 pub(crate) fn start_discovery(
     port: u16,
     state: CoreState,
     app: AppHandle,
-) -> Result<ServiceDaemon, String> {
+) -> Result<DiscoveryService, String> {
     let mdns = ServiceDaemon::new().map_err(|error| error.to_string())?;
     let (id, name) = {
         let inner = state.0.lock().expect("state lock");
@@ -27,7 +40,8 @@ pub(crate) fn start_discovery(
     let service = ServiceInfo::new(SERVICE_TYPE, &id, &hostname, (), port, &properties[..])
         .map_err(|error| error.to_string())?
         .enable_addr_auto();
-    mdns.register(service).map_err(|error| error.to_string())?;
+    mdns.register(service.clone())
+        .map_err(|error| error.to_string())?;
 
     let receiver = mdns
         .browse(SERVICE_TYPE)
@@ -82,5 +96,8 @@ pub(crate) fn start_discovery(
         }
     });
 
-    Ok(mdns)
+    Ok(DiscoveryService {
+        daemon: mdns,
+        service,
+    })
 }

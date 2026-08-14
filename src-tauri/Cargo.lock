@@ -2728,6 +2728,7 @@ dependencies = [
 name = "pombocorreio"
 version = "0.1.0"
 dependencies = [
+ "gtk",
  "hostname",
  "mdns-sd",
  "mime_guess",

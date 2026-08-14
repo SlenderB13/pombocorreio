@@ -31,6 +31,9 @@ pub fn run() {
     #[cfg(target_os = "android")]
     let builder = builder.plugin(tauri_plugin_pombo_inbox::init());
 
+    #[cfg(desktop)]
+    let builder = builder.on_window_event(tray::handle_window_event);
+
     builder
         .setup(|app| {
             let root = app
