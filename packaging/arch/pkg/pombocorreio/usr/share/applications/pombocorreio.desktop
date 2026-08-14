@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Pombo Correio
-Comment=Send files to nearby devices
-Exec=pombocorreio
-Icon=pombocorreio
-Terminal=false
-Categories=Network;FileTransfer;
-StartupNotify=true
