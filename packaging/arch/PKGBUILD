@@ -1,0 +1,19 @@
+pkgname=pombocorreio
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Local network file transfers between desktop and Android devices"
+arch=('x86_64')
+url="https://github.com/pombocorreio/pombocorreio"
+license=('custom')
+depends=('webkit2gtk-4.1' 'gtk3' 'libappindicator-gtk3')
+options=('!strip')
+source=('pombocorreio' 'pombocorreio.desktop' 'pombocorreio-32.png' 'pombocorreio-128.png' 'pombocorreio-512.png')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "$srcdir/pombocorreio" "$pkgdir/usr/bin/pombocorreio"
+  install -Dm644 "$srcdir/pombocorreio.desktop" "$pkgdir/usr/share/applications/pombocorreio.desktop"
+  install -Dm644 "$srcdir/pombocorreio-32.png" "$pkgdir/usr/share/icons/hicolor/32x32/apps/pombocorreio.png"
+  install -Dm644 "$srcdir/pombocorreio-128.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/pombocorreio.png"
+  install -Dm644 "$srcdir/pombocorreio-512.png" "$pkgdir/usr/share/icons/hicolor/512x512/apps/pombocorreio.png"
+}
