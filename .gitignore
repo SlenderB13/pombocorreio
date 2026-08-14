@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated Android plugin files
+plugins/inbox/android/.gradle/
+plugins/inbox/android/.tauri/
+plugins/inbox/android/build/
