@@ -1,0 +1,210 @@
+name: Release desktop installers
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate release version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - id: version
+        name: Check tag and project versions
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          RELEASE_VERSION="$version" node - <<'NODE'
+          const fs = require("node:fs");
+
+          const expected = process.env.RELEASE_VERSION;
+          const packageVersion = require("./package.json").version;
+          const tauriVersion = require("./src-tauri/tauri.conf.json").version;
+          const cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
+          const cargoVersion = cargo.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+          const cargoLock = fs.readFileSync("src-tauri/Cargo.lock", "utf8");
+          const cargoLockVersion = cargoLock.match(
+            /name = "pombocorreio"\nversion = "([^"]+)"/,
+          )?.[1];
+          const pkgbuild = fs.readFileSync("packaging/arch/PKGBUILD", "utf8");
+          const archVersion = pkgbuild.match(/^pkgver=(.+)$/m)?.[1];
+
+          const versions = {
+            "Git tag": expected,
+            "package.json": packageVersion,
+            "tauri.conf.json": tauriVersion,
+            "Cargo.toml": cargoVersion,
+            "Cargo.lock": cargoLockVersion,
+            "PKGBUILD": archVersion,
+          };
+
+          for (const [source, version] of Object.entries(versions)) {
+            if (version !== expected) {
+              console.error(`${source} has version ${version}, expected ${expected}`);
+              process.exitCode = 1;
+            }
+          }
+          NODE
+
+  linux:
+    name: Build Debian and RPM packages
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            rpm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Debian and RPM packages
+        run: npm run tauri -- build --bundles deb,rpm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-installers
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+
+  arch:
+    name: Build Arch Linux package
+    needs: validate
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - name: Install tools and native dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            git \
+            gtk3 \
+            libappindicator \
+            librsvg \
+            nodejs \
+            npm \
+            pacman-contrib \
+            patchelf \
+            rustup \
+            webkit2gtk-4.1
+          rustup default stable
+
+      - uses: actions/checkout@v4
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build native release binary
+        run: npm run tauri -- build --no-bundle
+
+      - name: Stage Arch package inputs
+        run: |
+          install -m 0755 src-tauri/target/release/pombocorreio packaging/arch/pombocorreio
+          install -m 0644 src-tauri/icons/32x32.png packaging/arch/pombocorreio-32.png
+          install -m 0644 src-tauri/icons/128x128.png packaging/arch/pombocorreio-128.png
+          install -m 0644 src-tauri/icons/icon.png packaging/arch/pombocorreio-512.png
+          cd packaging/arch
+          updpkgsums
+
+      - name: Build pacman package
+        run: |
+          useradd --create-home builder
+          chown -R builder:builder packaging/arch
+          runuser -u builder -- bash -lc 'cd "$GITHUB_WORKSPACE/packaging/arch" && makepkg --force --nodeps --cleanbuild'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-installer
+          if-no-files-found: error
+          path: packaging/arch/*.pkg.tar.zst
+
+  windows:
+    name: Build Windows installers
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build MSI and NSIS installers
+        run: npm run tauri -- build --bundles msi,nsis
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+
+  publish:
+    name: Publish GitHub Release
+    needs: [validate, linux, arch, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*-installer*"
+          merge-multiple: true
+          path: downloaded-assets
+
+      - name: Collect installers
+        run: |
+          mkdir release-assets
+          find downloaded-assets -type f -print0 | while IFS= read -r -d '' file; do
+            cp "$file" "release-assets/$(basename "$file")"
+          done
+
+      - name: Generate SHA-256 checksums
+        working-directory: release-assets
+        run: sha256sum -- * > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-assets/* \
+            --verify-tag \
+            --generate-notes \
+            --title "Pombo Correio $RELEASE_VERSION"
