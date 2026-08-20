@@ -67,6 +67,25 @@ fn take_shared_content(app: tauri::AppHandle) -> Result<SharedContent, String> {
     }
 }
 
+#[tauri::command]
+fn clear_shared_content(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri_plugin_pombo_inbox::InboxExt;
+
+        return app
+            .inbox()
+            .clear_shared_content()
+            .map_err(|error| error.to_string());
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Ok(())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -121,7 +140,8 @@ pub fn run() {
             answer_offer,
             send_files,
             send_text,
-            take_shared_content
+            take_shared_content,
+            clear_shared_content
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pombo Correio");

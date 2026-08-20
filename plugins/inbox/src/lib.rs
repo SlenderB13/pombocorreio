@@ -22,6 +22,20 @@ struct PublishResponse {
     uri: String,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedFile {
+    pub path: String,
+    pub name: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedContent {
+    pub files: Vec<SharedFile>,
+    pub text: Option<String>,
+}
+
 pub struct Inbox<R: Runtime>(tauri::plugin::PluginHandle<R>);
 
 impl<R: Runtime> Inbox<R> {
@@ -32,6 +46,18 @@ impl<R: Runtime> Inbox<R> {
             mime_type,
         })?;
         Ok(response.uri)
+    }
+
+    pub fn take_shared_content(&self) -> Result<SharedContent> {
+        Ok(self
+            .0
+            .run_mobile_plugin::<SharedContent>("takeSharedContent", ())?)
+    }
+
+    pub fn clear_shared_content(&self) -> Result<()> {
+        self.0
+            .run_mobile_plugin::<()>("clearSharedContent", ())?;
+        Ok(())
     }
 }
 
@@ -62,4 +88,3 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         })
         .build()
 }
-

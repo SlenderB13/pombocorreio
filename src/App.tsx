@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -38,7 +38,14 @@ function App() {
   const [selected, setSelected] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
   const [status, setStatus] = useState("Looking for nearby devices…");
+  const hasImportedShare = useRef(false);
   const refresh = async () => setSnapshot(await invoke<AppSnapshot>("snapshot"));
+
+  function discardImportedShare() {
+    if (!hasImportedShare.current) return;
+    hasImportedShare.current = false;
+    invoke("clear_shared_content").catch(() => undefined);
+  }
 
   useEffect(() => {
     refresh().catch((error) => setStatus(String(error)));
@@ -60,6 +67,40 @@ function App() {
     return () => void cleanup.then((callbacks) => callbacks.forEach((fn) => fn()));
   }, []);
 
+  useEffect(() => {
+    async function importSharedContent() {
+      try {
+        const shared = await invoke<SharedContent>("take_shared_content");
+        if (shared.files.length) {
+          hasImportedShare.current = true;
+          setFiles(shared.files);
+          setMode("files");
+          setStatus(
+            `${shared.files.length} shared file${shared.files.length === 1 ? "" : "s"} ready`,
+          );
+        } else if (shared.text) {
+          hasImportedShare.current = true;
+          setText(shared.text);
+          setMode("text");
+          setStatus("Shared text ready");
+        }
+      } catch (error) {
+        setStatus(`Could not import shared content: ${error}`);
+      }
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void importSharedContent();
+    };
+    void importSharedContent();
+    window.addEventListener("focus", importSharedContent);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", importSharedContent);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
   const selectedPeers = useMemo(
     () => snapshot.peers.filter((peer) => selected.includes(peer.id)),
     [snapshot.peers, selected],
@@ -73,10 +114,12 @@ function App() {
     try {
       if (mode === "files") {
         await invoke("send_files", { peerIds: selected, files });
+        discardImportedShare();
         setFiles([]);
         setStatus("Files sent successfully");
       } else {
         await invoke("send_text", { peerIds: selected, text });
+        discardImportedShare();
         setText("");
         setStatus("Text copied to the receiving clipboard");
       }
@@ -94,6 +137,7 @@ function App() {
         fileAccessMode: "copy",
       });
       if (!picked) return;
+      discardImportedShare();
       const paths = Array.isArray(picked) ? picked : [picked];
       setFiles((current) => {
         const next = paths.map((path) => ({ path, name: displayName(path) }));
@@ -148,13 +192,19 @@ function App() {
       <div className="mode-switch" aria-label="What to send">
         <button
           className={`mode-option ${mode === "files" ? "active" : ""}`}
-          onClick={() => setMode("files")}
+          onClick={() => {
+            if (mode !== "files") discardImportedShare();
+            setMode("files");
+          }}
         >
           <FileUp size={15} /> Files
         </button>
         <button
           className={`mode-option ${mode === "text" ? "active" : ""}`}
-          onClick={() => setMode("text")}
+          onClick={() => {
+            if (mode !== "text") discardImportedShare();
+            setMode("text");
+          }}
         >
           <Type size={15} /> Text
         </button>
@@ -194,6 +244,7 @@ function App() {
               className="link clear"
               onClick={(event) => {
                 event.stopPropagation();
+                discardImportedShare();
                 setFiles([]);
               }}
             >
@@ -212,7 +263,10 @@ function App() {
           <textarea
             autoFocus
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => {
+              discardImportedShare();
+              setText(event.target.value);
+            }}
             placeholder="Paste a link, message, or any other text…"
           />
         </section>
