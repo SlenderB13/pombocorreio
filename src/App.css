@@ -93,6 +93,26 @@ header p {
   background: #57e389;
 }
 
+.mode-switch {
+  align-self: center;
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.mode-switch .mode-option {
+  min-height: 32px;
+  padding: 6px 15px;
+  color: var(--muted);
+  background: transparent;
+}
+.mode-switch .mode-option:hover:not(:disabled),
+.mode-switch .mode-option.active {
+  color: white;
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .dropzone {
   min-height: 220px;
   border: 2px dashed rgba(255, 255, 255, 0.2);
@@ -159,6 +179,56 @@ h2 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.text-zone {
+  min-height: 220px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #282828;
+}
+.text-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+}
+.text-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  font-weight: 700;
+}
+.text-heading small {
+  font-size: 11px;
+}
+.text-zone textarea {
+  width: 100%;
+  min-height: 150px;
+  flex: 1;
+  resize: vertical;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  outline: none;
+  color: white;
+  background: #1e1e1e;
+  font: inherit;
+  line-height: 1.45;
+}
+.text-zone textarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(53, 132, 228, 0.2);
+}
+.text-zone textarea::placeholder {
+  color: rgba(255, 255, 255, 0.38);
 }
 
 .devices {
@@ -267,6 +337,13 @@ h2 {
   display: block;
   margin: 5px 0 12px;
   color: var(--muted);
+}
+.incoming .text-preview {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .actions {
   display: flex;

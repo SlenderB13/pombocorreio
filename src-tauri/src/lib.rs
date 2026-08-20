@@ -19,13 +19,60 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tauri::Manager;
-use transfer::send_files;
+use transfer::{send_files, send_text};
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SharedContent {
+    files: Vec<SharedFile>,
+    text: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+struct SharedFile {
+    path: String,
+    name: String,
+}
+
+#[tauri::command]
+fn take_shared_content(app: tauri::AppHandle) -> Result<SharedContent, String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri_plugin_pombo_inbox::InboxExt;
+
+        let content = app
+            .inbox()
+            .take_shared_content()
+            .map_err(|error| error.to_string())?;
+        return Ok(SharedContent {
+            files: content
+                .files
+                .into_iter()
+                .map(|file| SharedFile {
+                    path: file.path,
+                    name: file.name,
+                })
+                .collect(),
+            text: content.text,
+        });
+    }
+
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Ok(SharedContent {
+            files: Vec::new(),
+            text: None,
+        })
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_fs::init());
 
     #[cfg(target_os = "android")]
@@ -69,7 +116,13 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![snapshot, answer_offer, send_files])
+        .invoke_handler(tauri::generate_handler![
+            snapshot,
+            answer_offer,
+            send_files,
+            send_text,
+            take_shared_content
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Pombo Correio");
 }

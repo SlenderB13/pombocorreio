@@ -2,14 +2,17 @@ use crate::{
     models::Offer,
     state::{emit_change, CoreState, PendingOffer},
     storage::{publish_received, safe_destination},
+    transfer::MAX_TEXT_BYTES,
 };
 use serde::Serialize;
 use std::{
     fs::{self, File},
+    io::Read,
     net::TcpListener,
     thread,
 };
 use tauri::AppHandle;
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use tiny_http::{Header, Method, Response, Server, StatusCode};
 
 fn write_json<T: Serialize>(status: u16, value: &T) -> Response<std::io::Cursor<Vec<u8>>> {
@@ -41,6 +44,8 @@ pub(crate) fn start_http_server(
                 report_offer_status(request, &path[2], &state);
             } else if method == Method::Post && path.len() == 4 && path[..2] == ["v1", "files"] {
                 receive_file(request, &path[2], &path[3], &state, &app);
+            } else if method == Method::Post && path.len() == 3 && path[..2] == ["v1", "text"] {
+                receive_text(request, &path[2], &state, &app);
             } else {
                 let _ =
                     request.respond(write_json(404, &serde_json::json!({"error": "not found"})));
@@ -48,6 +53,70 @@ pub(crate) fn start_http_server(
         }
     });
     Ok(())
+}
+
+fn receive_text(
+    mut request: tiny_http::Request,
+    transfer_id: &str,
+    state: &CoreState,
+    app: &AppHandle,
+) {
+    let accepted = {
+        let inner = state.0.lock().expect("state lock");
+        inner
+            .offers
+            .get(transfer_id)
+            .is_some_and(|pending| pending.accepted == Some(true) && pending.offer.text.is_some())
+    };
+
+    if !accepted {
+        let _ = request.respond(write_json(
+            403,
+            &serde_json::json!({"error": "text transfer was not accepted"}),
+        ));
+        return;
+    }
+
+    let mut bytes = Vec::new();
+    match request
+        .as_reader()
+        .take((MAX_TEXT_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+    {
+        Ok(_) if bytes.len() > MAX_TEXT_BYTES => {
+            let _ = request.respond(write_json(
+                413,
+                &serde_json::json!({"error": "text is too large"}),
+            ));
+        }
+        Ok(_) => match String::from_utf8(bytes)
+            .map_err(|error| error.to_string())
+            .and_then(|text| {
+                app.clipboard()
+                    .write_text(text)
+                    .map_err(|error| error.to_string())
+            }) {
+            Ok(()) => {
+                state
+                    .0
+                    .lock()
+                    .expect("state lock")
+                    .offers
+                    .remove(transfer_id);
+                emit_change(app);
+                let _ = request.respond(write_json(201, &serde_json::json!({"copied": true})));
+            }
+            Err(error) => {
+                let _ = request.respond(write_json(500, &serde_json::json!({"error": error})));
+            }
+        },
+        Err(error) => {
+            let _ = request.respond(write_json(
+                400,
+                &serde_json::json!({"error": error.to_string()}),
+            ));
+        }
+    }
 }
 
 fn receive_offer(mut request: tiny_http::Request, state: &CoreState, app: &AppHandle) {

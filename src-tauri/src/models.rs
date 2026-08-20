@@ -17,6 +17,13 @@ pub(crate) struct FileMeta {
     pub(crate) size: u64,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TextMeta {
+    pub(crate) preview: String,
+    pub(crate) size: usize,
+}
+
 #[derive(Clone, Deserialize)]
 pub(crate) struct SelectedFile {
     pub(crate) path: String,
@@ -29,7 +36,10 @@ pub(crate) struct Offer {
     pub(crate) id: String,
     pub(crate) sender_id: String,
     pub(crate) sender_name: String,
+    #[serde(default)]
     pub(crate) files: Vec<FileMeta>,
+    #[serde(default)]
+    pub(crate) text: Option<TextMeta>,
 }
 
 #[derive(Clone, Serialize)]

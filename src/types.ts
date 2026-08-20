@@ -4,6 +4,7 @@ export type IncomingOffer = {
   senderId: string;
   senderName: string;
   files: { name: string; size: number }[];
+  text?: { preview: string; size: number };
 };
 export type AppSnapshot = {
   deviceId: string;

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Check, File, FileUp, RefreshCw, Send, Smartphone, X } from "lucide-react";
+import { Check, Clipboard, File, FileUp, RefreshCw, Send, Smartphone, Type, X } from "lucide-react";
 import type { AppSnapshot, IncomingOffer, Peer } from "./types";
 import "./App.css";
 
@@ -16,6 +16,9 @@ const emptySnapshot: AppSnapshot = {
 };
 const basename = (path: string) => path.split(/[\\/]/).pop() ?? path;
 type SelectedFile = { path: string; name: string };
+type TransferMode = "files" | "text";
+type SharedContent = { files: SelectedFile[]; text?: string | null };
+const maxTextBytes = 64 * 1024;
 
 function displayName(path: string) {
   const tail = basename(path);
@@ -30,6 +33,8 @@ function displayName(path: string) {
 function App() {
   const [snapshot, setSnapshot] = useState(emptySnapshot);
   const [files, setFiles] = useState<SelectedFile[]>([]);
+  const [text, setText] = useState("");
+  const [mode, setMode] = useState<TransferMode>("files");
   const [selected, setSelected] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
   const [status, setStatus] = useState("Looking for nearby devices…");
@@ -59,14 +64,22 @@ function App() {
     () => snapshot.peers.filter((peer) => selected.includes(peer.id)),
     [snapshot.peers, selected],
   );
+  const textBytes = new TextEncoder().encode(text).length;
 
   async function send() {
-    if (!files.length || !selectedPeers.length) return;
+    const hasContent = mode === "files" ? files.length > 0 : text.length > 0;
+    if (!hasContent || !selectedPeers.length) return;
     setStatus("Waiting for the receiving device…");
     try {
-      await invoke("send_files", { peerIds: selected, files });
-      setFiles([]);
-      setStatus("Sent successfully");
+      if (mode === "files") {
+        await invoke("send_files", { peerIds: selected, files });
+        setFiles([]);
+        setStatus("Files sent successfully");
+      } else {
+        await invoke("send_text", { peerIds: selected, text });
+        setText("");
+        setStatus("Text copied to the receiving clipboard");
+      }
     } catch (error) {
       setStatus(String(error));
     }
@@ -114,10 +127,14 @@ function App() {
       {snapshot.incoming.map((offer) => (
         <section className="incoming" key={offer.id}>
           <div>
-            <strong>{offer.senderName}</strong> wants to send {offer.files.length} file
-            {offer.files.length === 1 ? "" : "s"}.
+            <strong>{offer.senderName}</strong>{" "}
+            {offer.text
+              ? "wants to copy text to your clipboard."
+              : `wants to send ${offer.files.length} file${offer.files.length === 1 ? "" : "s"}.`}
           </div>
-          <small>{offer.files.map((file) => file.name).join(", ")}</small>
+          <small className={offer.text ? "text-preview" : undefined}>
+            {offer.text?.preview ?? offer.files.map((file) => file.name).join(", ")}
+          </small>
           <div className="actions">
             <button className="quiet" onClick={() => answer(offer, false)}>
               <X size={16} /> Decline
@@ -128,47 +145,78 @@ function App() {
           </div>
         </section>
       ))}
-      <section
-        className={`dropzone ${dragging ? "dragging" : ""}`}
-        role="button"
-        tabIndex={0}
-        onClick={pickFiles}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") void pickFiles();
-        }}
-      >
-        <div className="arrow">
-          <FileUp size={24} />
-        </div>
-        <h2>
-          {files.length
-            ? `${files.length} file${files.length === 1 ? "" : "s"} ready`
-            : "Choose files"}
-        </h2>
-        <p>{files.length ? "Tap to add more" : "Tap to browse or drop files here"}</p>
-        {files.length > 0 && (
-          <div className="file-list">
-            {files.slice(0, 3).map((file) => (
-              <span className="file-pill" key={file.path}>
-                <File size={13} />
-                {file.name}
-              </span>
-            ))}
-            {files.length > 3 && <span className="file-pill">+{files.length - 3} more</span>}
+      <div className="mode-switch" aria-label="What to send">
+        <button
+          className={`mode-option ${mode === "files" ? "active" : ""}`}
+          onClick={() => setMode("files")}
+        >
+          <FileUp size={15} /> Files
+        </button>
+        <button
+          className={`mode-option ${mode === "text" ? "active" : ""}`}
+          onClick={() => setMode("text")}
+        >
+          <Type size={15} /> Text
+        </button>
+      </div>
+      {mode === "files" ? (
+        <section
+          className={`dropzone ${dragging ? "dragging" : ""}`}
+          role="button"
+          tabIndex={0}
+          onClick={pickFiles}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") void pickFiles();
+          }}
+        >
+          <div className="arrow">
+            <FileUp size={24} />
           </div>
-        )}
-        {files.length > 0 && (
-          <button
-            className="link clear"
-            onClick={(event) => {
-              event.stopPropagation();
-              setFiles([]);
-            }}
-          >
-            <X size={14} /> Clear
-          </button>
-        )}
-      </section>
+          <h2>
+            {files.length
+              ? `${files.length} file${files.length === 1 ? "" : "s"} ready`
+              : "Choose files"}
+          </h2>
+          <p>{files.length ? "Tap to add more" : "Tap to browse or drop files here"}</p>
+          {files.length > 0 && (
+            <div className="file-list">
+              {files.slice(0, 3).map((file) => (
+                <span className="file-pill" key={file.path}>
+                  <File size={13} />
+                  {file.name}
+                </span>
+              ))}
+              {files.length > 3 && <span className="file-pill">+{files.length - 3} more</span>}
+            </div>
+          )}
+          {files.length > 0 && (
+            <button
+              className="link clear"
+              onClick={(event) => {
+                event.stopPropagation();
+                setFiles([]);
+              }}
+            >
+              <X size={14} /> Clear
+            </button>
+          )}
+        </section>
+      ) : (
+        <section className="text-zone">
+          <div className="text-heading">
+            <span>
+              <Clipboard size={18} /> Clipboard text
+            </span>
+            <small>{textBytes.toLocaleString()} / 65,536 bytes</small>
+          </div>
+          <textarea
+            autoFocus
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder="Paste a link, message, or any other text…"
+          />
+        </section>
+      )}
       <section className="devices">
         <div className="section-title">
           <h2>Nearby devices</h2>
@@ -213,8 +261,16 @@ function App() {
           <i />
           {status}
         </span>
-        <button className="send-button" disabled={!files.length || !selected.length} onClick={send}>
-          <Send size={16} /> Send{selected.length ? ` to ${selected.length}` : ""}
+        <button
+          className="send-button"
+          disabled={
+            !selected.length ||
+            (mode === "files" ? !files.length : !text.length || textBytes > maxTextBytes)
+          }
+          onClick={send}
+        >
+          <Send size={16} /> {mode === "text" ? "Copy" : "Send"}
+          {selected.length ? ` to ${selected.length}` : ""}
         </button>
       </footer>
     </main>
