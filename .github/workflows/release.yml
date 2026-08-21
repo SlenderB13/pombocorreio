@@ -132,14 +132,14 @@ jobs:
           install -m 0644 src-tauri/icons/32x32.png packaging/arch/pombocorreio-32.png
           install -m 0644 src-tauri/icons/128x128.png packaging/arch/pombocorreio-128.png
           install -m 0644 src-tauri/icons/icon.png packaging/arch/pombocorreio-512.png
-          cd packaging/arch
-          updpkgsums
 
       - name: Build pacman package
+        working-directory: packaging/arch
         run: |
           useradd --create-home builder
-          chown -R builder:builder packaging/arch
-          runuser -u builder -- bash -lc 'cd "$GITHUB_WORKSPACE/packaging/arch" && makepkg --force --nodeps --cleanbuild'
+          chown -R builder:builder .
+          runuser -u builder -- updpkgsums
+          runuser -u builder -- makepkg --force --nodeps --cleanbuild
 
       - uses: actions/upload-artifact@v4
         with:
