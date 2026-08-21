@@ -50,4 +50,5 @@ pub(crate) struct AppSnapshot {
     pub(crate) inbox: String,
     pub(crate) peers: Vec<Peer>,
     pub(crate) incoming: Vec<Offer>,
+    pub(crate) auto_open_links: bool,
 }

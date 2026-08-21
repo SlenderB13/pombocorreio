@@ -13,6 +13,7 @@ use std::{
 };
 use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_opener::OpenerExt;
 use tiny_http::{Header, Method, Response, Server, StatusCode};
 
 fn write_json<T: Serialize>(status: u16, value: &T) -> Response<std::io::Cursor<Vec<u8>>> {
@@ -89,25 +90,31 @@ fn receive_text(
                 &serde_json::json!({"error": "text is too large"}),
             ));
         }
-        Ok(_) => match String::from_utf8(bytes)
-            .map_err(|error| error.to_string())
-            .and_then(|text| {
-                app.clipboard()
-                    .write_text(text)
-                    .map_err(|error| error.to_string())
-            }) {
-            Ok(()) => {
-                state
-                    .0
-                    .lock()
-                    .expect("state lock")
-                    .offers
-                    .remove(transfer_id);
-                emit_change(app);
-                let _ = request.respond(write_json(201, &serde_json::json!({"copied": true})));
-            }
+        Ok(_) => match String::from_utf8(bytes).map_err(|error| error.to_string()) {
+            Ok(text) => match app.clipboard().write_text(text.clone()) {
+                Ok(()) => {
+                    let opened = open_link_if_enabled(&text, state, app);
+                    state
+                        .0
+                        .lock()
+                        .expect("state lock")
+                        .offers
+                        .remove(transfer_id);
+                    emit_change(app);
+                    let _ = request.respond(write_json(
+                        201,
+                        &serde_json::json!({"copied": true, "opened": opened}),
+                    ));
+                }
+                Err(error) => {
+                    let _ = request.respond(write_json(
+                        500,
+                        &serde_json::json!({"error": error.to_string()}),
+                    ));
+                }
+            },
             Err(error) => {
-                let _ = request.respond(write_json(500, &serde_json::json!({"error": error})));
+                let _ = request.respond(write_json(400, &serde_json::json!({"error": error})));
             }
         },
         Err(error) => {
@@ -116,6 +123,47 @@ fn receive_text(
                 &serde_json::json!({"error": error.to_string()}),
             ));
         }
+    }
+}
+
+fn open_link_if_enabled(text: &str, state: &CoreState, app: &AppHandle) -> bool {
+    let enabled = state.0.lock().expect("state lock").settings.auto_open_links;
+    if !enabled {
+        return false;
+    }
+
+    let Some(url) = openable_url(text) else {
+        return false;
+    };
+
+    app.opener().open_url(url, None::<String>).is_ok()
+}
+
+fn openable_url(text: &str) -> Option<String> {
+    let url = reqwest::Url::parse(text.trim()).ok()?;
+    matches!(url.scheme(), "http" | "https").then(|| url.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::openable_url;
+
+    #[test]
+    fn accepts_complete_http_links() {
+        assert_eq!(
+            openable_url("  https://youtu.be/example  "),
+            Some("https://youtu.be/example".into())
+        );
+        assert_eq!(
+            openable_url("http://example.com"),
+            Some("http://example.com/".into())
+        );
+    }
+
+    #[test]
+    fn rejects_unsafe_schemes_and_messages_containing_links() {
+        assert_eq!(openable_url("javascript:alert(1)"), None);
+        assert_eq!(openable_url("Watch this: https://youtu.be/example"), None);
     }
 }
 

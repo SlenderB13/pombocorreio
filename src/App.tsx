@@ -3,7 +3,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Check, Clipboard, File, FileUp, RefreshCw, Send, Smartphone, Type, X } from "lucide-react";
+import {
+  Check,
+  Clipboard,
+  File,
+  FileUp,
+  RefreshCw,
+  Send,
+  Settings,
+  Smartphone,
+  Type,
+  X,
+} from "lucide-react";
 import type { AppSnapshot, IncomingOffer, Peer } from "./types";
 import "./App.css";
 
@@ -13,6 +24,7 @@ const emptySnapshot: AppSnapshot = {
   inbox: "",
   peers: [],
   incoming: [],
+  autoOpenLinks: false,
 };
 const basename = (path: string) => path.split(/[\\/]/).pop() ?? path;
 type SelectedFile = { path: string; name: string };
@@ -38,6 +50,8 @@ function App() {
   const [selected, setSelected] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
   const [status, setStatus] = useState("Looking for nearby devices…");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const hasImportedShare = useRef(false);
   const refresh = async () => setSnapshot(await invoke<AppSnapshot>("snapshot"));
 
@@ -154,6 +168,18 @@ function App() {
     await refresh();
   }
 
+  async function changeAutoOpenLinks(enabled: boolean) {
+    setSettingsSaving(true);
+    try {
+      await invoke("set_auto_open_links", { enabled });
+      await refresh();
+    } catch (error) {
+      setStatus(`Could not save setting: ${error}`);
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
   return (
     <main>
       <header>
@@ -167,7 +193,56 @@ function App() {
         <div className="online">
           <i /> Online
         </div>
+        <button
+          className="header-button"
+          aria-label="Settings"
+          title="Settings"
+          onClick={() => setSettingsOpen(true)}
+        >
+          <Settings size={18} />
+        </button>
       </header>
+      {settingsOpen && (
+        <div
+          className="settings-backdrop"
+          role="presentation"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <section
+            className="settings-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="settings-titlebar">
+              <h2 id="settings-title">Settings</h2>
+              <button
+                className="header-button"
+                aria-label="Close settings"
+                onClick={() => setSettingsOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <label className="setting-row">
+              <span>
+                <strong>Open links automatically</strong>
+                <small>Open received HTTP and HTTPS links in the default app.</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={snapshot.autoOpenLinks}
+                disabled={settingsSaving}
+                onChange={(event) => void changeAutoOpenLinks(event.target.checked)}
+              />
+            </label>
+            <p className="settings-warning">
+              Disabled by default. Enable only for devices you trust.
+            </p>
+          </section>
+        </div>
+      )}
       {snapshot.incoming.map((offer) => (
         <section className="incoming" key={offer.id}>
           <div>

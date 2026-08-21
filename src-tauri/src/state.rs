@@ -42,7 +42,22 @@ pub(crate) fn snapshot(state: tauri::State<CoreState>) -> AppSnapshot {
             .filter(|pending| pending.accepted.is_none())
             .map(|pending| pending.offer.clone())
             .collect(),
+        auto_open_links: inner.settings.auto_open_links,
     }
+}
+
+#[tauri::command]
+pub(crate) fn set_auto_open_links(
+    enabled: bool,
+    state: tauri::State<CoreState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let mut inner = state.0.lock().map_err(|error| error.to_string())?;
+    inner.settings.auto_open_links = enabled;
+    persist(&inner)?;
+    drop(inner);
+    emit_change(&app);
+    Ok(())
 }
 
 #[tauri::command]

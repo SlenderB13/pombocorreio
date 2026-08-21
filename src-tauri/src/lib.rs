@@ -12,7 +12,7 @@ mod tray;
 use discovery::start_discovery;
 use server::start_http_server;
 use settings::{load_settings, persist};
-use state::{answer_offer, snapshot, CoreState, Inner};
+use state::{answer_offer, set_auto_open_links, snapshot, CoreState, Inner};
 use std::{
     collections::HashMap,
     net::TcpListener,
@@ -141,7 +141,8 @@ pub fn run() {
             send_files,
             send_text,
             take_shared_content,
-            clear_shared_content
+            clear_shared_content,
+            set_auto_open_links
         ])
         .run(tauri::generate_context!())
         .expect("error while running Pombo Correio");

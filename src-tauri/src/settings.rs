@@ -14,6 +14,8 @@ pub(crate) struct Settings {
     pub(crate) inbox: PathBuf,
     #[serde(default)]
     pub(crate) trusted_devices: HashSet<String>,
+    #[serde(default)]
+    pub(crate) auto_open_links: bool,
 }
 
 pub(crate) fn load_settings(root: PathBuf, downloads: Option<PathBuf>) -> Result<Settings, String> {
@@ -37,6 +39,7 @@ pub(crate) fn load_settings(root: PathBuf, downloads: Option<PathBuf>) -> Result
             .unwrap_or_else(|| "My device".into()),
         inbox,
         trusted_devices: HashSet::new(),
+        auto_open_links: false,
     })
 }
 

@@ -12,4 +12,5 @@ export type AppSnapshot = {
   inbox: string;
   peers: Peer[];
   incoming: IncomingOffer[];
+  autoOpenLinks: boolean;
 };
